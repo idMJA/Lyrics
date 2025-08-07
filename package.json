@@ -1,0 +1,62 @@
+{
+  "name": "@mjba/lyrics",
+  "version": "1.0.0",
+  "description": "A TypeScript library for fetching song lyrics from Musixmatch",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "dev": "tsup --watch",
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "lyrics",
+    "music",
+    "musixmatch",
+    "songs",
+    "typescript",
+    "isrc"
+  ],
+  "author": "iaMJ",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/idMJA/lyrics.git"
+  },
+  "bugs": {
+    "url": "https://github.com/idMJA/lyrics/issues"
+  },
+  "homepage": "https://github.com/idMJA/lyrics#readme",
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "fetch-cookie": "^3.0.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.0.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ]
+}
