@@ -7,33 +7,32 @@
 // import { lyricsClient } from '@mjba/lyrics';
 
 // For local development:
-import { lyricsClient } from '../dist/index.mjs';
+import { lyricsClient } from "../dist/index.js";
 
 async function simpleExample() {
-  console.log('🎵 Simple @mjba/lyrics Example\n');
+	console.log("🎵 Simple @mjba/lyrics Example\n");
 
-  try {
-    // Search for a popular song
-    const result = await lyricsClient.searchAndGetLyrics('Hello Adele');
-    
-    if (result.success) {
-      console.log('✅ Found lyrics!');
-      console.log(`Song: ${result.songInfo?.title}`);
-      console.log(`Artist: ${result.songInfo?.artist}`);
-      
-      // Show just the first few lines to avoid copyright issues
-      if (result.lyrics) {
-        const lines = result.lyrics.split('\n').slice(0, 3);
-        console.log('\nFirst few lines:');
-        lines.forEach(line => console.log(`  ${line}`));
-        console.log('  ...');
-      }
-    } else {
-      console.log('❌ Could not find lyrics:', result.error);
-    }
-  } catch (error) {
-    console.error('Error:', error);
-  }
+	try {
+		// Search for a popular song
+		const result = await lyricsClient.searchAndGetLyrics("Stecu Stecu");
+
+		if (result.success) {
+			console.log("✅ Found lyrics!");
+			console.log(`Song: ${result.songInfo?.title}`);
+			console.log(`Artist: ${result.songInfo?.artist}`);
+
+			if (result.lyrics) {
+				const lines = result.lyrics.split("\n").slice(0, 3);
+				console.log("\nFirst few lines:");
+				lines.forEach((line) => console.log(`  ${line}`));
+				console.log("  ...");
+			}
+		} else {
+			console.log("❌ Could not find lyrics:", result.error);
+		}
+	} catch (error) {
+		console.error("Error:", error);
+	}
 }
 
 simpleExample();

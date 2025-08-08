@@ -1,21 +1,21 @@
-import { describe, it, expect } from 'bun:test';
-import { LyricsClient, lyricsClient } from '../src/index.js';
+import { describe, expect, it } from "bun:test";
+import { LyricsClient, lyricsClient } from "../src/index.js";
 
-describe('LyricsClient', () => {
-  it('should create a new instance', () => {
-    const client = new LyricsClient();
-    expect(client).toBeInstanceOf(LyricsClient);
-  });
+describe("LyricsClient", () => {
+	it("should create a new instance", () => {
+		const client = new LyricsClient();
+		expect(client).toBeInstanceOf(LyricsClient);
+	});
 
-  it('should export a default instance', () => {
-    expect(lyricsClient).toBeInstanceOf(LyricsClient);
-  });
+	it("should export a default instance", () => {
+		expect(lyricsClient).toBeInstanceOf(LyricsClient);
+	});
 
-  it('should have required methods', () => {
-    expect(typeof lyricsClient.getLyricsByISRC).toBe('function');
-    expect(typeof lyricsClient.searchAndGetLyrics).toBe('function');
-    expect(typeof lyricsClient.getTrackByISRC).toBe('function');
-  });
+	it("should have required methods", () => {
+		expect(typeof lyricsClient.getLyricsByISRC).toBe("function");
+		expect(typeof lyricsClient.searchAndGetLyrics).toBe("function");
+		expect(typeof lyricsClient.getTrackByISRC).toBe("function");
+	});
 });
 
 // Integration tests (commented out to avoid API calls in CI)

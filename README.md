@@ -1,11 +1,15 @@
 # @mjba/lyrics
 
+> This library uses the Musixmatch API for educational and purpose only. Please respect Musixmatch's terms of service and rate limits.
+
 A TypeScript library for fetching song lyrics from Musixmatch. Supports multiple JavaScript runtimes including Node.js, Bun, Deno, and browsers.
 
 ## Features
 
 - 🎵 Get lyrics by ISRC code
 - 🔍 Search and get lyrics by song title/artist
+- ⏱️ **NEW**: Get synced lyrics with precise timestamps (millisecond accuracy)
+- 🎯 **NEW**: Support for both richsync and subtitle formats
 - 📱 Cross-platform support (Node.js, Bun, Deno, Browser)
 - 🚀 TypeScript support with full type definitions
 - 💾 Automatic token caching (Node.js/Bun)
@@ -45,9 +49,17 @@ import { LyricsClient, lyricsClient } from '@mjba/lyrics';
 const result = await lyricsClient.getLyricsByISRC('USUM71703861');
 console.log(result.lyrics);
 
+// Get synced lyrics with timestamps
+const syncedResult = await lyricsClient.getSyncedLyricsByISRC('USUM71703861');
+if (syncedResult.hasTimestamps) {
+  syncedResult.syncedLyrics?.forEach(lyric => {
+    console.log(`[${lyric.time.minutes}:${lyric.time.seconds}.${lyric.time.ms}] ${lyric.text}`);
+  });
+}
+
 // Or create your own instance
 const client = new LyricsClient();
-const searchResult = await client.searchAndGetLyrics('Imagine Dragons Thunder');
+const searchResult = await client.searchAndGetSyncedLyrics('Imagine Dragons Thunder');
 ```
 
 ### CommonJS
@@ -97,6 +109,24 @@ if (result.success) {
 }
 ```
 
+#### `getSyncedLyricsByISRC(isrc: string): Promise<LyricsResponse>`
+
+Get synced lyrics with timestamps using ISRC. Returns lyrics with precise timing information.
+
+```typescript
+const result = await lyricsClient.getSyncedLyricsByISRC('USUM71703861');
+
+if (result.success && result.hasTimestamps && result.syncedLyrics) {
+  console.log('Synced lyrics found!');
+  result.syncedLyrics.forEach(lyric => {
+    const timestamp = `${lyric.time.minutes.toString().padStart(2, '0')}:${lyric.time.seconds.toString().padStart(2, '0')}.${lyric.time.ms.toString().padStart(3, '0')}`;
+    console.log(`[${timestamp}] ${lyric.text}`);
+  });
+} else if (result.success && result.lyrics) {
+  console.log('Only regular lyrics available:', result.lyrics);
+}
+```
+
 #### `searchAndGetLyrics(query: string): Promise<LyricsResponse>`
 
 Search for a track and get its lyrics.
@@ -108,6 +138,25 @@ if (result.success) {
   console.log('Lyrics:', result.lyrics);
   console.log('Artist:', result.songInfo?.artist);
   console.log('Title:', result.songInfo?.title);
+}
+```
+
+#### `searchAndGetSyncedLyrics(query: string): Promise<LyricsResponse>`
+
+Search for a track and get synced lyrics with timestamps. Automatically falls back to regular lyrics if synced lyrics are not available.
+
+```typescript
+const result = await lyricsClient.searchAndGetSyncedLyrics('Shape of You Ed Sheeran');
+
+if (result.success) {
+  if (result.hasTimestamps && result.syncedLyrics) {
+    console.log('Synced lyrics with timestamps:');
+    result.syncedLyrics.forEach(lyric => {
+      console.log(`[${lyric.time.total.toFixed(2)}s] ${lyric.text}`);
+    });
+  } else if (result.lyrics) {
+    console.log('Regular lyrics:', result.lyrics);
+  }
 }
 ```
 
@@ -135,6 +184,22 @@ interface LyricsResponse {
   lyrics?: string;
   songInfo?: SongInfo;
   error?: string;
+  syncedLyrics?: SyncedLyric[];
+  hasTimestamps?: boolean;
+}
+```
+
+#### `SyncedLyric`
+
+```typescript
+interface SyncedLyric {
+  text: string;
+  time: {
+    total: number; // time in seconds
+    minutes: number;
+    seconds: number;
+    ms: number; // milliseconds (0-999)
+  };
 }
 ```
 
@@ -162,28 +227,6 @@ interface Track {
   track_rating?: number;
 }
 ```
-
-## Runtime Support
-
-### Node.js (≥16.0.0)
-- ✅ Full support with file system caching
-- ✅ Cookie support via fetch-cookie
-- Requires: `node-fetch`, `fetch-cookie`
-
-### Bun
-- ✅ Full support with file system caching
-- ✅ Native fetch with cookie support
-- Requires: `node-fetch`, `fetch-cookie` (as fallback)
-
-### Deno
-- ✅ Full support with file system caching
-- ✅ Native fetch support
-- No additional dependencies required
-
-### Browser
-- ✅ Basic support (no file system caching)
-- ✅ Native fetch support
-- No additional dependencies required
 
 ## Examples
 
@@ -214,6 +257,36 @@ async function main() {
 main().catch(console.error);
 ```
 
+### Synced Lyrics with Timestamps
+
+```typescript
+import { lyricsClient } from '@mjba/lyrics';
+
+async function syncedLyricsExample() {
+  // Get synced lyrics with precise timestamps
+  const result = await lyricsClient.searchAndGetSyncedLyrics('Levitating Dua Lipa');
+  
+  if (result.success && result.hasTimestamps && result.syncedLyrics) {
+    console.log(`Found synced lyrics with ${result.syncedLyrics.length} lines`);
+    
+    // Display lyrics with timestamps
+    result.syncedLyrics.forEach(lyric => {
+      const time = `${lyric.time.minutes.toString().padStart(2, '0')}:${lyric.time.seconds.toString().padStart(2, '0')}.${lyric.time.ms.toString().padStart(3, '0')}`;
+      console.log(`[${time}] ${lyric.text}`);
+    });
+    
+    // Timing analysis
+    const duration = result.syncedLyrics[result.syncedLyrics.length - 1]?.time.total || 0;
+    console.log(`\nLyrics span: ${duration.toFixed(2)} seconds`);
+  } else if (result.success && result.lyrics) {
+    console.log('Only regular lyrics available (no timestamps)');
+    console.log(result.lyrics);
+  }
+}
+
+syncedLyricsExample().catch(console.error);
+```
+
 ### Error Handling
 
 ```typescript
@@ -221,10 +294,17 @@ import { lyricsClient, LyricsResponse } from '@mjba/lyrics';
 
 async function getLyricsWithErrorHandling(query: string): Promise<string | null> {
   try {
-    const result: LyricsResponse = await lyricsClient.searchAndGetLyrics(query);
+    const result: LyricsResponse = await lyricsClient.searchAndGetSyncedLyrics(query);
     
-    if (result.success && result.lyrics) {
-      return result.lyrics;
+    if (result.success) {
+      if (result.hasTimestamps && result.syncedLyrics) {
+        // Return synced lyrics as formatted text
+        return result.syncedLyrics.map(lyric => 
+          `[${lyric.time.total.toFixed(2)}s] ${lyric.text}`
+        ).join('\n');
+      } else if (result.lyrics) {
+        return result.lyrics;
+      }
     } else {
       console.warn('Lyrics not found:', result.error);
       return null;
@@ -233,6 +313,7 @@ async function getLyricsWithErrorHandling(query: string): Promise<string | null>
     console.error('Failed to fetch lyrics:', error);
     return null;
   }
+  return null;
 }
 
 // Usage
@@ -255,10 +336,15 @@ const songs = [
 ];
 
 for (const song of songs) {
-  const result = await lyricsClient.searchAndGetLyrics(song);
+  const result = await lyricsClient.searchAndGetSyncedLyrics(song);
   
   if (result.success) {
-    console.log(`✅ ${result.songInfo?.title} by ${result.songInfo?.artist}`);
+    const timestampInfo = result.hasTimestamps ? ' (with timestamps)' : ' (text only)';
+    console.log(`✅ ${result.songInfo?.title} by ${result.songInfo?.artist}${timestampInfo}`);
+    
+    if (result.hasTimestamps && result.syncedLyrics) {
+      console.log(`   📝 ${result.syncedLyrics.length} synced lines`);
+    }
   } else {
     console.log(`❌ Could not find: ${song}`);
   }
@@ -269,8 +355,8 @@ for (const song of songs) {
 
 ```bash
 # Clone the repository
-git clone https://github.com/mjba/lyrics.git
-cd lyrics
+git clone https://github.com/idMJA/Lyrics.git
+cd Lyrics
 
 # Install dependencies
 bun install
@@ -291,25 +377,10 @@ bun test
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Disclaimer
-
-This library uses the Musixmatch API for educational and personal use. Please respect Musixmatch's terms of service and rate limits.
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run src/index.ts
-```
 
 This project was created using `bun init` in bun v1.2.19. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
