@@ -4,9 +4,9 @@
  */
 
 import {
-	lyricsClient,
 	LyricsClient,
 	type LyricsResponse,
+	lyricsClient,
 	type Track,
 } from "../src/index.js";
 
@@ -15,7 +15,7 @@ async function main() {
 
 	console.log("1. Searching for lyrics by song name...");
 	try {
-		const result1: LyricsResponse = await lyricsClient.searchAndGetLyrics(
+		const result1: LyricsResponse = await lyricsClient.search(
 			"Imagine Dragons Thunder",
 		);
 
@@ -38,8 +38,7 @@ async function main() {
 
 	console.log("2. Getting lyrics by ISRC...");
 	try {
-		const result2: LyricsResponse =
-			await lyricsClient.getLyricsByISRC("GBUM71505078");
+		const result2: LyricsResponse = await lyricsClient.get("GBUM71505078");
 
 		if (result2.success && result2.lyrics) {
 			console.log("✅ Found lyrics via ISRC!");
@@ -58,7 +57,7 @@ async function main() {
 
 	console.log("3. Getting track info by ISRC...");
 	try {
-		const track: Track = await lyricsClient.getTrackByISRC("GBUM71505078");
+		const track: Track = await lyricsClient.getTrack("GBUM71505078");
 		console.log("✅ Found track info!");
 		console.log(`Track ID: ${track.track_id}`);
 		console.log(`Name: ${track.track_name}`);
@@ -73,9 +72,7 @@ async function main() {
 	console.log("4. Using custom client instance...");
 	const customClient = new LyricsClient();
 	try {
-		const result4 = await customClient.searchAndGetLyrics(
-			"Bohemian Rhapsody Queen",
-		);
+		const result4 = await customClient.search("Bohemian Rhapsody Queen");
 
 		if (result4.success) {
 			console.log("✅ Custom client works!");
@@ -98,7 +95,7 @@ async function main() {
 
 	for (const song of songs) {
 		try {
-			const result = await lyricsClient.searchAndGetLyrics(song);
+			const result = await lyricsClient.search(song);
 
 			if (result.success) {
 				console.log(

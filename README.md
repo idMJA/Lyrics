@@ -2,7 +2,7 @@
 
 > This library uses the Musixmatch API for educational and purpose only. Please respect Musixmatch's terms of service and rate limits.
 
-A TypeScript library for fetching song lyrics from Musixmatch. Supports multiple JavaScript runtimes including Node.js, Bun, Deno, and browsers.
+A TypeScript library for fetching song lyrics from Musixmatch. Supports Node.js and Bun runtimes.
 
 ## Features
 
@@ -10,9 +10,9 @@ A TypeScript library for fetching song lyrics from Musixmatch. Supports multiple
 - 🔍 Search and get lyrics by song title/artist
 - ⏱️ **NEW**: Get synced lyrics with precise timestamps (millisecond accuracy)
 - 🎯 **NEW**: Support for both richsync and subtitle formats
-- 📱 Cross-platform support (Node.js, Bun, Deno, Browser)
+- 📱 Cross-platform support (Node.js, Bun)
 - 🚀 TypeScript support with full type definitions
-- 💾 Automatic token caching (Node.js/Bun)
+- 💾 Automatic token caching
 - 🍪 Cookie-based session management
 
 ## Installation
@@ -31,12 +31,7 @@ pnpm add @mjba/lyrics
 bun add @mjba/lyrics
 ```
 
-### Runtime Dependencies
 
-For Node.js environments, you'll also need:
-```bash
-npm install node-fetch fetch-cookie
-```
 
 ## Usage
 
@@ -46,11 +41,11 @@ npm install node-fetch fetch-cookie
 import { LyricsClient, lyricsClient } from '@mjba/lyrics';
 
 // Using the default instance
-const result = await lyricsClient.getLyricsByISRC('USUM71703861');
+const result = await lyricsClient.get('USUM71703861');
 console.log(result.lyrics);
 
 // Get synced lyrics with timestamps
-const syncedResult = await lyricsClient.getSyncedLyricsByISRC('USUM71703861');
+const syncedResult = await lyricsClient.getSynced('USUM71703861');
 if (syncedResult.hasTimestamps) {
   syncedResult.syncedLyrics?.forEach(lyric => {
     console.log(`[${lyric.time.minutes}:${lyric.time.seconds}.${lyric.time.ms}] ${lyric.text}`);
@@ -59,7 +54,7 @@ if (syncedResult.hasTimestamps) {
 
 // Or create your own instance
 const client = new LyricsClient();
-const searchResult = await client.searchAndGetSyncedLyrics('Imagine Dragons Thunder');
+const searchResult = await client.searchSynced('Imagine Dragons Thunder');
 ```
 
 ### CommonJS
@@ -70,36 +65,18 @@ const { LyricsClient, lyricsClient } = require('@mjba/lyrics');
 // Usage is the same as ES modules
 ```
 
-### Deno
 
-```typescript
-import { LyricsClient, lyricsClient } from 'npm:@mjba/lyrics';
-
-const result = await lyricsClient.getLyricsByISRC('USUM71703861');
-console.log(result.lyrics);
-```
-
-### Browser (via CDN)
-
-```html
-<script type="module">
-  import { lyricsClient } from 'https://unpkg.com/@mjba/lyrics/dist/index.mjs';
-  
-  const result = await lyricsClient.searchAndGetLyrics('Billie Eilish Bad Guy');
-  console.log(result.lyrics);
-</script>
-```
 
 ## API Reference
 
 ### LyricsClient
 
-#### `getLyricsByISRC(isrc: string): Promise<LyricsResponse>`
+#### `get(isrc: string): Promise<LyricsResponse>`
 
 Get lyrics using an International Standard Recording Code (ISRC).
 
 ```typescript
-const result = await lyricsClient.getLyricsByISRC('USUM71703861');
+const result = await lyricsClient.get('USUM71703861');
 
 if (result.success) {
   console.log('Lyrics:', result.lyrics);
@@ -109,12 +86,12 @@ if (result.success) {
 }
 ```
 
-#### `getSyncedLyricsByISRC(isrc: string): Promise<LyricsResponse>`
+#### `getSynced(isrc: string): Promise<LyricsResponse>`
 
 Get synced lyrics with timestamps using ISRC. Returns lyrics with precise timing information.
 
 ```typescript
-const result = await lyricsClient.getSyncedLyricsByISRC('USUM71703861');
+const result = await lyricsClient.getSynced('USUM71703861');
 
 if (result.success && result.hasTimestamps && result.syncedLyrics) {
   console.log('Synced lyrics found!');
@@ -127,12 +104,12 @@ if (result.success && result.hasTimestamps && result.syncedLyrics) {
 }
 ```
 
-#### `searchAndGetLyrics(query: string): Promise<LyricsResponse>`
+#### `search(query: string): Promise<LyricsResponse>`
 
 Search for a track and get its lyrics.
 
 ```typescript
-const result = await lyricsClient.searchAndGetLyrics('Imagine Dragons Thunder');
+const result = await lyricsClient.search('Imagine Dragons Thunder');
 
 if (result.success) {
   console.log('Lyrics:', result.lyrics);
@@ -141,12 +118,12 @@ if (result.success) {
 }
 ```
 
-#### `searchAndGetSyncedLyrics(query: string): Promise<LyricsResponse>`
+#### `searchSynced(query: string): Promise<LyricsResponse>`
 
 Search for a track and get synced lyrics with timestamps. Automatically falls back to regular lyrics if synced lyrics are not available.
 
 ```typescript
-const result = await lyricsClient.searchAndGetSyncedLyrics('Shape of You Ed Sheeran');
+const result = await lyricsClient.searchSynced('Shape of You Ed Sheeran');
 
 if (result.success) {
   if (result.hasTimestamps && result.syncedLyrics) {
@@ -160,13 +137,13 @@ if (result.success) {
 }
 ```
 
-#### `getTrackByISRC(isrc: string): Promise<Track>`
+#### `getTrack(isrc: string): Promise<Track>`
 
 Get track information without lyrics using ISRC.
 
 ```typescript
 try {
-  const track = await lyricsClient.getTrackByISRC('USUM71703861');
+  const track = await lyricsClient.getTrack('USUM71703861');
   console.log('Track:', track.track_name);
   console.log('Artist:', track.artist_name);
 } catch (error) {
@@ -237,7 +214,7 @@ import { lyricsClient } from '@mjba/lyrics';
 
 async function main() {
   // Search by song name and artist
-  const result1 = await lyricsClient.searchAndGetLyrics('Shape of You Ed Sheeran');
+  const result1 = await lyricsClient.search('Shape of You Ed Sheeran');
   
   if (result1.success) {
     console.log('Found lyrics for:', result1.songInfo?.title);
@@ -246,7 +223,7 @@ async function main() {
   }
   
   // Get lyrics by ISRC (if you have it)
-  const result2 = await lyricsClient.getLyricsByISRC('GBUM71505078');
+  const result2 = await lyricsClient.get('GBUM71505078');
   
   if (result2.success) {
     console.log('\nISRC lookup successful!');
@@ -264,7 +241,7 @@ import { lyricsClient } from '@mjba/lyrics';
 
 async function syncedLyricsExample() {
   // Get synced lyrics with precise timestamps
-  const result = await lyricsClient.searchAndGetSyncedLyrics('Levitating Dua Lipa');
+  const result = await lyricsClient.searchSynced('Levitating Dua Lipa');
   
   if (result.success && result.hasTimestamps && result.syncedLyrics) {
     console.log(`Found synced lyrics with ${result.syncedLyrics.length} lines`);
@@ -294,7 +271,7 @@ import { lyricsClient, LyricsResponse } from '@mjba/lyrics';
 
 async function getLyricsWithErrorHandling(query: string): Promise<string | null> {
   try {
-    const result: LyricsResponse = await lyricsClient.searchAndGetSyncedLyrics(query);
+    const result: LyricsResponse = await lyricsClient.searchSynced(query);
     
     if (result.success) {
       if (result.hasTimestamps && result.syncedLyrics) {
@@ -323,10 +300,10 @@ if (lyrics) {
 }
 ```
 
-### Multiple Runtime Example
+### Multi-runtime Example (Node.js & Bun)
 
 ```typescript
-// This code works in Node.js, Bun, Deno, and browsers!
+// This code works in Node.js and Bun!
 import { lyricsClient } from '@mjba/lyrics';
 
 const songs = [
@@ -336,7 +313,7 @@ const songs = [
 ];
 
 for (const song of songs) {
-  const result = await lyricsClient.searchAndGetSyncedLyrics(song);
+  const result = await lyricsClient.searchSynced(song);
   
   if (result.success) {
     const timestampInfo = result.hasTimestamps ? ' (with timestamps)' : ' (text only)';

@@ -12,9 +12,9 @@ describe("LyricsClient", () => {
 	});
 
 	it("should have required methods", () => {
-		expect(typeof lyricsClient.getLyricsByISRC).toBe("function");
-		expect(typeof lyricsClient.searchAndGetLyrics).toBe("function");
-		expect(typeof lyricsClient.getTrackByISRC).toBe("function");
+		expect(typeof lyricsClient.get).toBe("function");
+		expect(typeof lyricsClient.search).toBe("function");
+		expect(typeof lyricsClient.getTrack).toBe("function");
 	});
 });
 
@@ -22,7 +22,7 @@ describe("LyricsClient", () => {
 /*
 describe('Integration Tests', () => {
   it('should search and get lyrics', async () => {
-    const result = await lyricsClient.searchAndGetLyrics('Imagine Dragons Thunder');
+    const result = await lyricsClient.search('Imagine Dragons Thunder');
     
     if (result.success) {
       expect(result.lyrics).toBeTruthy();
@@ -36,7 +36,7 @@ describe('Integration Tests', () => {
 
   it('should get lyrics by ISRC', async () => {
     // This is the ISRC for "Shape of You" by Ed Sheeran
-    const result = await lyricsClient.getLyricsByISRC('GBUM71505078');
+    const result = await lyricsClient.get('GBUM71505078');
     
     if (result.success) {
       expect(result.lyrics).toBeTruthy();

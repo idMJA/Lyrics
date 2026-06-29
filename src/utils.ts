@@ -1,13 +1,14 @@
 import {
 	mkdir as fsMkdir,
 	readFile as fsReadFile,
+	rm as fsRm,
 	writeFile as fsWriteFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import fetchCookie from "fetch-cookie";
-import nodeFetch from "node-fetch";
-import type { FetchFunction, GlobalThis, NodeError } from "./types.js";
+import ky from "ky";
+import type { NodeError } from "./types.js";
 
 export function isNode(): boolean {
 	return (
@@ -18,116 +19,50 @@ export function isNode(): boolean {
 }
 
 export function isBun(): boolean {
-	return typeof (globalThis as GlobalThis).Bun !== "undefined";
-}
-
-export function isDeno(): boolean {
-	return typeof (globalThis as GlobalThis).Deno !== "undefined";
-}
-
-export function isBrowser(): boolean {
-	return (
-		typeof (globalThis as GlobalThis).window !== "undefined" &&
-		typeof (globalThis as GlobalThis).document !== "undefined"
-	);
+	return typeof globalThis.Bun !== "undefined";
 }
 
 export async function mkdir(path: string): Promise<void> {
-	if (isNode() || isBun()) {
-		try {
-			await fsMkdir(path, { recursive: true });
-		} catch (error: unknown) {
-			const nodeError = error as NodeError;
-			if (nodeError.code !== "EEXIST") {
-				throw error;
-			}
-		}
-	} else if (isDeno()) {
-		try {
-			const deno = (globalThis as GlobalThis).Deno;
-			if (deno) {
-				await deno.mkdir(path, { recursive: true });
-			}
-		} catch (error: unknown) {
-			const deno = (globalThis as GlobalThis).Deno;
-			if (deno && !(error instanceof deno.errors.AlreadyExists)) {
-				throw error;
-			}
+	try {
+		await fsMkdir(path, { recursive: true });
+	} catch (error: unknown) {
+		const nodeError = error as NodeError;
+		if (nodeError.code !== "EEXIST") {
+			throw error;
 		}
 	}
 }
 
 export async function writeFile(path: string, data: string): Promise<void> {
-	if (isNode() || isBun()) {
-		await fsWriteFile(path, data, "utf-8");
-	} else if (isDeno()) {
-		const deno = (globalThis as GlobalThis).Deno;
-		if (deno) {
-			await deno.writeTextFile(path, data);
-		}
-	}
+	await fsWriteFile(path, data, "utf-8");
 }
 
 export async function readFile(path: string): Promise<string> {
-	if (isNode() || isBun()) {
-		return await fsReadFile(path, "utf-8");
-	} else if (isDeno()) {
-		const deno = (globalThis as GlobalThis).Deno;
-		if (deno) {
-			return await deno.readTextFile(path);
-		}
-	}
+	return await fsReadFile(path, "utf-8");
+}
 
-	throw new Error("File system operations not supported in browser");
+export async function deleteFile(path: string): Promise<void> {
+	try {
+		await fsRm(path, { force: true });
+	} catch {
+		// ignore
+	}
 }
 
 export function getCachePath(appName: string): string {
-	if (isNode() || isBun()) {
-		return join(homedir(), ".cache", appName);
-	} else if (isDeno()) {
-		const deno = (globalThis as GlobalThis).Deno;
-		if (deno) {
-			const homeDir =
-				deno.env.get("HOME") || deno.env.get("USERPROFILE") || "/tmp";
-			return `${homeDir}/.cache/${appName}`;
-		}
-	}
-
-	return appName;
+	return join(homedir(), ".cache", appName);
 }
 
-let fetchInstance: FetchFunction | null = null;
+const cookieJar = fetchCookie(globalThis.fetch);
 
-export async function getFetch(): Promise<FetchFunction> {
-	if (fetchInstance) {
-		return fetchInstance;
-	}
-
-	if (isBrowser()) {
-		fetchInstance = (globalThis as GlobalThis).fetch as FetchFunction;
-		return fetchInstance;
-	}
-
-	if (isDeno()) {
-		fetchInstance = (globalThis as GlobalThis).fetch as FetchFunction;
-		return fetchInstance;
-	}
-
-	if (isNode() || isBun()) {
-		try {
-			fetchInstance = fetchCookie(nodeFetch) as unknown as FetchFunction;
-			return fetchInstance;
-		} catch (_error) {
-			try {
-				fetchInstance = nodeFetch as unknown as FetchFunction;
-				return fetchInstance;
-			} catch (_fallbackError) {
-				throw new Error(
-					"node-fetch is required for Node.js/Bun environments. Please install it: npm install node-fetch",
-				);
-			}
-		}
-	}
-
-	throw new Error("No fetch implementation available");
-}
+export const kyClient = ky.create({
+	fetch: cookieJar,
+	headers: {
+		"User-Agent":
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/115.0.0.0 Safari/537.36",
+		Accept: "application/json, text/javascript, */*; q=0.01",
+		Referer: "https://www.musixmatch.com/",
+		Origin: "https://www.musixmatch.com",
+	},
+	throwHttpErrors: false,
+});

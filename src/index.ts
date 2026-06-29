@@ -1,6 +1,5 @@
 import { dirname, join } from "node:path";
 import type {
-	FetchResponse,
 	LyricsBody,
 	LyricsResponse,
 	MusixmatchResponse,
@@ -13,10 +12,9 @@ import type {
 	TrackSearchBody,
 } from "./types.js";
 import {
+	deleteFile,
 	getCachePath,
-	getFetch,
-	isBun,
-	isNode,
+	kyClient,
 	mkdir,
 	readFile,
 	writeFile,
@@ -26,7 +24,7 @@ export class LyricsClient {
 	private ROOT_URL = "https://apic-desktop.musixmatch.com/ws/1.1/";
 	private token: string | null = null;
 
-	private parseSubtitleToSyncedLyrics(subtitleBody: string): SyncedLyric[] {
+	private parseSubtitle(subtitleBody: string): SyncedLyric[] {
 		const lines = subtitleBody.split("\n");
 		const timestampMap = new Map<string, string[]>();
 
@@ -53,7 +51,7 @@ export class LyricsClient {
 
 		for (const [timestampKey, textParts] of timestampMap) {
 			const match = timestampKey.match(/(\d{2}):(\d{2})\.(\d{2})/);
-			if (!match || !match[1] || !match[2] || !match[3]) continue;
+			if (!match?.[1] || !match[2] || !match[3]) continue;
 
 			const [, minutes, seconds, hundredths] = match;
 			const minutesNum = parseInt(minutes, 10);
@@ -85,7 +83,7 @@ export class LyricsClient {
 		return syncedLyrics;
 	}
 
-	private parseRichSyncToSyncedLyrics(richsyncBody: string): SyncedLyric[] {
+	private parseRichSync(richsyncBody: string): SyncedLyric[] {
 		try {
 			const richsyncData = JSON.parse(richsyncBody);
 			const timestampMap = new Map<number, string[]>();
@@ -142,10 +140,23 @@ export class LyricsClient {
 		}
 	}
 
-	private async get(
+	private formatToLrc(syncedLyrics: SyncedLyric[]): string {
+		return syncedLyrics
+			.map((line) => {
+				const min = line.time.minutes.toString().padStart(2, "0");
+				const sec = line.time.seconds.toString().padStart(2, "0");
+				const ms = Math.floor(line.time.ms / 10)
+					.toString()
+					.padStart(2, "0");
+				return `[${min}:${sec}.${ms}] ${line.text}`;
+			})
+			.join("\n");
+	}
+
+	private async rawGet(
 		action: string,
 		query: Array<[string, string]> = [],
-	): Promise<FetchResponse> {
+	): Promise<Response> {
 		if (action !== "token.get" && this.token === null) {
 			await this.getToken();
 		}
@@ -160,16 +171,7 @@ export class LyricsClient {
 		const params = new URLSearchParams(query);
 
 		try {
-			const fetch = await getFetch();
-			const response = await fetch(`${url}?${params.toString()}`, {
-				headers: {
-					"User-Agent":
-						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/115.0.0.0 Safari/537.36",
-					Accept: "application/json, text/javascript, */*; q=0.01",
-					Referer: "https://www.musixmatch.com/",
-					Origin: "https://www.musixmatch.com",
-				},
-			});
+			const response = await kyClient.get(`${url}?${params.toString()}`);
 			return response;
 		} catch (error) {
 			console.error("Error making Musixmatch request:", error);
@@ -177,75 +179,89 @@ export class LyricsClient {
 		}
 	}
 
-	private async getToken(): Promise<void> {
-		// only use caching in Node.js/Bun
-		if (isNode() || isBun()) {
-			const tokenPath = join(
-				getCachePath("syncedlyrics"),
-				"musixmatch_token.json",
-			);
-			const currentTime = Math.floor(Date.now() / 1000);
+	private async apiGet(
+		action: string,
+		query: Array<[string, string]> = [],
+	): Promise<Response> {
+		const queryClone = query.map(([k, v]) => [k, v] as [string, string]);
+		const response = await this.rawGet(action, queryClone);
 
+		if (action !== "token.get") {
+			const clone = response.clone();
 			try {
-				const tokenData = await readFile(tokenPath);
-				const cachedTokenData = JSON.parse(tokenData);
-				const cachedToken = cachedTokenData.token;
-				const expirationTime = cachedTokenData.expiration_time;
-
-				if (cachedToken && expirationTime && currentTime < expirationTime) {
-					this.token = cachedToken;
-					return;
+				const data = (await clone.json()) as MusixmatchResponse<unknown>;
+				if (data?.message?.header?.status_code === 401) {
+					this.token = null;
+					const tokenPath = join(
+						getCachePath("syncedlyrics"),
+						"musixmatch_token.json",
+					);
+					await deleteFile(tokenPath);
+					const retryQueryClone = query.map(
+						([k, v]) => [k, v] as [string, string],
+					);
+					return await this.rawGet(action, retryQueryClone);
 				}
 			} catch {
-				console.warn("No valid cached token found, fetching a new one.");
+				// ignore parse errors
 			}
+		}
+
+		return response;
+	}
+
+	private async getToken(): Promise<void> {
+		const tokenPath = join(
+			getCachePath("syncedlyrics"),
+			"musixmatch_token.json",
+		);
+		const currentTime = Math.floor(Date.now() / 1000);
+
+		try {
+			const tokenData = await readFile(tokenPath);
+			const cachedTokenData = JSON.parse(tokenData);
+			const cachedToken = cachedTokenData.token;
+			const expirationTime = cachedTokenData.expiration_time;
+
+			if (cachedToken && expirationTime && currentTime < expirationTime) {
+				this.token = cachedToken;
+				return;
+			}
+		} catch {
+			console.warn("No valid cached token found, fetching a new one.");
+		}
+
+		try {
+			const response = await this.apiGet("token.get", [
+				["user_language", "en"],
+			]);
+			const data = (await response.json()) as MusixmatchResponse<TokenBody>;
+
+			if (data.message.header.status_code === 401) {
+				await new Promise((resolve) => setTimeout(resolve, 10000));
+				return this.getToken();
+			}
+
+			const newToken = data.message.body.user_token;
+			const expirationTime = currentTime + 600;
+
+			this.token = newToken;
+
+			const tokenData = {
+				token: newToken,
+				expiration_time: expirationTime,
+			};
 
 			try {
-				const response = await this.get("token.get", [["user_language", "en"]]);
-				const data = (await response.json()) as MusixmatchResponse<TokenBody>;
-
-				if (data.message.header.status_code === 401) {
-					await new Promise((resolve) => setTimeout(resolve, 10000));
-					return this.getToken();
-				}
-
-				const newToken = data.message.body.user_token;
-				const expirationTime = currentTime + 600;
-
-				this.token = newToken;
-
-				const tokenData = {
-					token: newToken,
-					expiration_time: expirationTime,
-				};
-
-				try {
-					const tokenDir = dirname(tokenPath);
-					await mkdir(tokenDir);
-					await writeFile(tokenPath, JSON.stringify(tokenData));
-				} catch (writeError) {
-					console.warn("Could not cache token:", writeError);
-				}
-			} catch (error) {
-				console.error("Error getting Musixmatch token:", error);
-				throw error;
+				const tokenDir = dirname(tokenPath);
+				await mkdir(tokenDir);
+				await writeFile(tokenPath, JSON.stringify(tokenData));
+			} catch (writeError) {
+				console.warn("Could not cache token:", writeError);
 			}
-		} else {
-			// for browser/Deno, just get token without caching
-			try {
-				const response = await this.get("token.get", [["user_language", "en"]]);
-				const data = (await response.json()) as MusixmatchResponse<TokenBody>;
-
-				if (data.message.header.status_code === 401) {
-					await new Promise((resolve) => setTimeout(resolve, 10000));
-					return this.getToken();
-				}
-
-				this.token = data.message.body.user_token;
-			} catch (error) {
-				console.error("Error getting Musixmatch token:", error);
-				throw error;
-			}
+		} catch (error) {
+			console.error("Error getting Musixmatch token:", error);
+			throw error;
 		}
 	}
 
@@ -254,9 +270,11 @@ export class LyricsClient {
 	 * @param isrc - International Standard Recording Code
 	 * @returns Promise<LyricsResponse>
 	 */
-	async getSyncedLyricsByISRC(isrc: string): Promise<LyricsResponse> {
+	async getSynced(isrc: string): Promise<LyricsResponse> {
 		try {
-			const trackResponse = await this.get("track.get", [["track_isrc", isrc]]);
+			const trackResponse = await this.apiGet("track.get", [
+				["track_isrc", isrc],
+			]);
 			const trackData =
 				(await trackResponse.json()) as MusixmatchResponse<TrackBody>;
 
@@ -272,7 +290,7 @@ export class LyricsClient {
 
 			// try get richsync first (more detailed timing)
 			try {
-				const richsyncResponse = await this.get("track.richsync.get", [
+				const richsyncResponse = await this.apiGet("track.richsync.get", [
 					["track_id", trackId.toString()],
 				]);
 				const richsyncData =
@@ -280,14 +298,13 @@ export class LyricsClient {
 
 				if (richsyncData.message.header.status_code === 200) {
 					const richsync = richsyncData.message.body.richsync;
-					const syncedLyrics = this.parseRichSyncToSyncedLyrics(
-						richsync.richsync_body,
-					);
+					const syncedLyrics = this.parseRichSync(richsync.richsync_body);
 
 					if (syncedLyrics.length > 0) {
 						return {
 							success: true,
 							syncedLyrics,
+							lyrics: this.formatToLrc(syncedLyrics),
 							hasTimestamps: true,
 							songInfo: {
 								title: track.track_name,
@@ -303,7 +320,7 @@ export class LyricsClient {
 			}
 
 			try {
-				const subtitleResponse = await this.get("track.subtitle.get", [
+				const subtitleResponse = await this.apiGet("track.subtitle.get", [
 					["track_id", trackId.toString()],
 				]);
 				const subtitleData =
@@ -311,14 +328,13 @@ export class LyricsClient {
 
 				if (subtitleData.message.header.status_code === 200) {
 					const subtitle = subtitleData.message.body.subtitle;
-					const syncedLyrics = this.parseSubtitleToSyncedLyrics(
-						subtitle.subtitle_body,
-					);
+					const syncedLyrics = this.parseSubtitle(subtitle.subtitle_body);
 
 					if (syncedLyrics.length > 0) {
 						return {
 							success: true,
 							syncedLyrics,
+							lyrics: this.formatToLrc(syncedLyrics),
 							hasTimestamps: true,
 							songInfo: {
 								title: track.track_name,
@@ -333,8 +349,7 @@ export class LyricsClient {
 				// fallback to regular lyrics
 			}
 
-			// Fallback to regular lyrics if no synced lyrics available
-			const lyricsResponse = await this.get("track.lyrics.get", [
+			const lyricsResponse = await this.apiGet("track.lyrics.get", [
 				["track_id", trackId.toString()],
 			]);
 			const lyricsData =
@@ -374,13 +389,16 @@ export class LyricsClient {
 	 * @param query - Search query (artist and track name)
 	 * @returns Promise<LyricsResponse>
 	 */
-	async searchAndGetSyncedLyrics(query: string): Promise<LyricsResponse> {
+	async searchSynced(query: string): Promise<LyricsResponse> {
+		if (/^[A-Z]{2}-?[A-Z0-9]{3}-?\d{2}-?\d{5}$/i.test(query.trim())) {
+			return this.getSynced(query.trim().replace(/-/g, ""));
+		}
+
 		try {
 			// Search for track
-			const searchResponse = await this.get("track.search", [
+			const searchResponse = await this.apiGet("track.search", [
 				["q", query],
 				["page_size", "1"],
-				["s_track_rating", "desc"],
 			]);
 
 			const searchData =
@@ -409,9 +427,8 @@ export class LyricsClient {
 			const track = firstTrack.track;
 			const trackId = track.track_id;
 
-			// Try to get richsync first (more detailed timing)
 			try {
-				const richsyncResponse = await this.get("track.richsync.get", [
+				const richsyncResponse = await this.apiGet("track.richsync.get", [
 					["track_id", trackId.toString()],
 				]);
 				const richsyncData =
@@ -419,14 +436,13 @@ export class LyricsClient {
 
 				if (richsyncData.message.header.status_code === 200) {
 					const richsync = richsyncData.message.body.richsync;
-					const syncedLyrics = this.parseRichSyncToSyncedLyrics(
-						richsync.richsync_body,
-					);
+					const syncedLyrics = this.parseRichSync(richsync.richsync_body);
 
 					if (syncedLyrics.length > 0) {
 						return {
 							success: true,
 							syncedLyrics,
+							lyrics: this.formatToLrc(syncedLyrics),
 							hasTimestamps: true,
 							songInfo: {
 								title: track.track_name,
@@ -441,9 +457,8 @@ export class LyricsClient {
 				// Fallback to subtitle if richsync fails
 			}
 
-			// Try subtitle format as fallback
 			try {
-				const subtitleResponse = await this.get("track.subtitle.get", [
+				const subtitleResponse = await this.apiGet("track.subtitle.get", [
 					["track_id", trackId.toString()],
 				]);
 				const subtitleData =
@@ -451,14 +466,13 @@ export class LyricsClient {
 
 				if (subtitleData.message.header.status_code === 200) {
 					const subtitle = subtitleData.message.body.subtitle;
-					const syncedLyrics = this.parseSubtitleToSyncedLyrics(
-						subtitle.subtitle_body,
-					);
+					const syncedLyrics = this.parseSubtitle(subtitle.subtitle_body);
 
 					if (syncedLyrics.length > 0) {
 						return {
 							success: true,
 							syncedLyrics,
+							lyrics: this.formatToLrc(syncedLyrics),
 							hasTimestamps: true,
 							songInfo: {
 								title: track.track_name,
@@ -470,11 +484,10 @@ export class LyricsClient {
 					}
 				}
 			} catch {
-				// Fallback to regular lyrics
+				// fallback to regular lyrics
 			}
 
-			// Fallback to regular lyrics if no synced lyrics available
-			const lyricsResponse = await this.get("track.lyrics.get", [
+			const lyricsResponse = await this.apiGet("track.lyrics.get", [
 				["track_id", trackId.toString()],
 			]);
 			const lyricsData =
@@ -514,9 +527,11 @@ export class LyricsClient {
 	 * @param isrc - International Standard Recording Code
 	 * @returns Promise<LyricsResponse>
 	 */
-	async getLyricsByISRC(isrc: string): Promise<LyricsResponse> {
+	async get(isrc: string): Promise<LyricsResponse> {
 		try {
-			const trackResponse = await this.get("track.get", [["track_isrc", isrc]]);
+			const trackResponse = await this.apiGet("track.get", [
+				["track_isrc", isrc],
+			]);
 
 			const trackData =
 				(await trackResponse.json()) as MusixmatchResponse<TrackBody>;
@@ -531,8 +546,7 @@ export class LyricsClient {
 			const track = trackData.message.body.track;
 			const trackId = track.track_id;
 
-			// Get lyrics using track ID
-			const lyricsResponse = await this.get("track.lyrics.get", [
+			const lyricsResponse = await this.apiGet("track.lyrics.get", [
 				["track_id", trackId.toString()],
 			]);
 
@@ -573,13 +587,15 @@ export class LyricsClient {
 	 * @param query - Search query (artist and track name)
 	 * @returns Promise<LyricsResponse>
 	 */
-	async searchAndGetLyrics(query: string): Promise<LyricsResponse> {
+	async search(query: string): Promise<LyricsResponse> {
+		if (/^[A-Z]{2}-?[A-Z0-9]{3}-?\d{2}-?\d{5}$/i.test(query.trim())) {
+			return this.get(query.trim().replace(/-/g, ""));
+		}
+
 		try {
-			// Search for track
-			const searchResponse = await this.get("track.search", [
+			const searchResponse = await this.apiGet("track.search", [
 				["q", query],
 				["page_size", "1"],
-				["s_track_rating", "desc"],
 			]);
 
 			const searchData =
@@ -608,8 +624,7 @@ export class LyricsClient {
 			const track = firstTrack.track;
 			const trackId = track.track_id;
 
-			// Get lyrics using track ID
-			const lyricsResponse = await this.get("track.lyrics.get", [
+			const lyricsResponse = await this.apiGet("track.lyrics.get", [
 				["track_id", trackId.toString()],
 			]);
 
@@ -650,9 +665,9 @@ export class LyricsClient {
 	 * @param isrc - International Standard Recording Code
 	 * @returns Promise<Track>
 	 */
-	async getTrackByISRC(isrc: string): Promise<Track> {
+	async getTrack(isrc: string): Promise<Track> {
 		try {
-			const response = await this.get("track.get", [["track_isrc", isrc]]);
+			const response = await this.apiGet("track.get", [["track_isrc", isrc]]);
 
 			const data = (await response.json()) as MusixmatchResponse<TrackBody>;
 

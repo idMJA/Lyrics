@@ -101,34 +101,9 @@ export interface RichSyncBody {
 
 export interface GlobalThis {
 	Bun?: unknown;
-	Deno?: {
-		mkdir: (path: string, options?: { recursive?: boolean }) => Promise<void>;
-		writeTextFile: (path: string, data: string) => Promise<void>;
-		readTextFile: (path: string) => Promise<string>;
-		env: {
-			get: (key: string) => string | undefined;
-		};
-		errors: {
-			AlreadyExists: new () => Error;
-		};
-	};
-	window?: unknown;
-	document?: unknown;
 	fetch?: typeof fetch;
 }
 
 export interface NodeError extends Error {
 	code?: string;
 }
-
-export interface FetchResponse {
-	json(): Promise<unknown>;
-	ok: boolean;
-	status: number;
-	statusText: string;
-}
-
-export type FetchFunction = (
-	input: RequestInfo | URL,
-	init?: RequestInit,
-) => Promise<FetchResponse>;

@@ -15,7 +15,7 @@ async function testSyncedLyrics() {
 
 	// Fetch all results in parallel
 	const results = await Promise.all(
-		testSongs.map((song) => lyricsClient.searchAndGetSyncedLyrics(song)),
+		testSongs.map((song) => lyricsClient.searchSynced(song)),
 	);
 
 	// Display all results together
@@ -58,7 +58,7 @@ async function testSpecificSong() {
 	console.log(`🎵 Testing detailed timestamps for: "${song}"`);
 
 	try {
-		const result = await lyricsClient.searchAndGetSyncedLyrics(song);
+		const result = await lyricsClient.searchSynced(song);
 
 		if (result.success && result.hasTimestamps && result.syncedLyrics) {
 			console.log(
@@ -103,4 +103,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 	main().catch(console.error);
 }
 
-export { testSyncedLyrics, testSpecificSong };
+export { testSpecificSong, testSyncedLyrics };
