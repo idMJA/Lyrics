@@ -1,14 +1,14 @@
 {
 	"name": "@mjba/lyrics",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"description": "A TypeScript library for fetching song lyrics from Musixmatch",
-	"main": "dist/index.js",
+	"main": "dist/index.cjs",
 	"module": "dist/index.mjs",
-	"types": "dist/index.d.ts",
+	"types": "dist/index.d.mts",
 	"exports": {
 		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs",
 			"require": "./dist/index.cjs"
 		}
 	},
