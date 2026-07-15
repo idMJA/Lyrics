@@ -10,6 +10,7 @@ A TypeScript library for fetching song lyrics from Musixmatch. Supports Node.js 
 - 🔍 Search and get lyrics by song title/artist
 - ⏱️ **NEW**: Get synced lyrics with precise timestamps (millisecond accuracy)
 - 🎯 **NEW**: Support for both richsync and subtitle formats
+- 🔤 **NEW**: Support for word-level synchronized lyrics (RichSync)
 - 📱 Cross-platform support (Node.js, Bun)
 - 🚀 TypeScript support with full type definitions
 - 💾 Automatic token caching
@@ -162,6 +163,7 @@ interface LyricsResponse {
   songInfo?: SongInfo;
   error?: string;
   syncedLyrics?: SyncedLyric[];
+  richSyncedLyrics?: RichSyncedLyricLine[];
   hasTimestamps?: boolean;
 }
 ```
@@ -177,6 +179,32 @@ interface SyncedLyric {
     seconds: number;
     ms: number; // milliseconds (0-999)
   };
+}
+
+interface WordSyncedLyric {
+  text: string;
+  time: {
+    total: number; // time in seconds
+    minutes: number;
+    seconds: number;
+    ms: number; // milliseconds (0-999)
+  };
+}
+
+interface RichSyncedLyricLine {
+  startTime: {
+    total: number;
+    minutes: number;
+    seconds: number;
+    ms: number;
+  };
+  endTime: {
+    total: number;
+    minutes: number;
+    seconds: number;
+    ms: number;
+  };
+  words: WordSyncedLyric[];
 }
 ```
 
@@ -262,6 +290,31 @@ async function syncedLyricsExample() {
 }
 
 syncedLyricsExample().catch(console.error);
+```
+
+### Word-by-Word (RichSync) Lyrics
+
+```typescript
+import { lyricsClient } from '@mjba/lyrics';
+
+async function wordLyricsExample() {
+  const result = await lyricsClient.searchSynced('Levitating Dua Lipa');
+  
+  if (result.success && result.richSyncedLyrics) {
+    console.log('Word-by-word lyrics found!');
+    
+    // Print the first line in detail
+    const firstLine = result.richSyncedLyrics[0];
+    if (firstLine) {
+      console.log(`Line 1 start: ${firstLine.startTime.total}s, end: ${firstLine.endTime.total}s`);
+      
+      const formatted = firstLine.words.map(w => `${w.text}(<${w.time.total.toFixed(2)}s>)`).join('');
+      console.log(formatted);
+    }
+  }
+}
+
+wordLyricsExample().catch(console.error);
 ```
 
 ### Error Handling

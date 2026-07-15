@@ -4,12 +4,14 @@ import type {
 	LyricsResponse,
 	MusixmatchResponse,
 	RichSyncBody,
+	RichSyncedLyricLine,
 	SubtitleBody,
 	SyncedLyric,
 	TokenBody,
 	Track,
 	TrackBody,
 	TrackSearchBody,
+	WordSyncedLyric,
 } from "./types.js";
 import {
 	deleteFile,
@@ -135,6 +137,68 @@ export class LyricsClient {
 			syncedLyrics.sort((a, b) => a.time.total - b.time.total);
 
 			return syncedLyrics;
+		} catch {
+			return [];
+		}
+	}
+
+	private parseRichSyncToWords(richsyncBody: string): RichSyncedLyricLine[] {
+		try {
+			const richsyncData = JSON.parse(richsyncBody);
+			const lines: RichSyncedLyricLine[] = [];
+
+			if (Array.isArray(richsyncData)) {
+				for (const item of richsyncData) {
+					if (
+						item.ts !== undefined &&
+						item.te !== undefined &&
+						item.l &&
+						Array.isArray(item.l)
+					) {
+						const startTimeTotal = parseFloat(item.ts);
+						const endTimeTotal = parseFloat(item.te);
+
+						const startTime = {
+							total: startTimeTotal,
+							minutes: Math.floor(startTimeTotal / 60),
+							seconds: Math.floor(startTimeTotal % 60),
+							ms: Math.round(startTimeTotal * 1000) % 1000,
+						};
+
+						const endTime = {
+							total: endTimeTotal,
+							minutes: Math.floor(endTimeTotal / 60),
+							seconds: Math.floor(endTimeTotal % 60),
+							ms: Math.round(endTimeTotal * 1000) % 1000,
+						};
+
+						const words: WordSyncedLyric[] = [];
+						for (const wordItem of item.l) {
+							if (wordItem.c !== undefined && wordItem.o !== undefined) {
+								const offset = parseFloat(wordItem.o);
+								const wordTimeTotal = startTimeTotal + offset;
+								words.push({
+									text: wordItem.c,
+									time: {
+										total: wordTimeTotal,
+										minutes: Math.floor(wordTimeTotal / 60),
+										seconds: Math.floor(wordTimeTotal % 60),
+										ms: Math.round(wordTimeTotal * 1000) % 1000,
+									},
+								});
+							}
+						}
+
+						lines.push({
+							startTime,
+							endTime,
+							words,
+						});
+					}
+				}
+			}
+
+			return lines;
 		} catch {
 			return [];
 		}
@@ -304,6 +368,9 @@ export class LyricsClient {
 						return {
 							success: true,
 							syncedLyrics,
+							richSyncedLyrics: this.parseRichSyncToWords(
+								richsync.richsync_body,
+							),
 							lyrics: this.formatToLrc(syncedLyrics),
 							hasTimestamps: true,
 							songInfo: {
@@ -442,6 +509,9 @@ export class LyricsClient {
 						return {
 							success: true,
 							syncedLyrics,
+							richSyncedLyrics: this.parseRichSyncToWords(
+								richsync.richsync_body,
+							),
 							lyrics: this.formatToLrc(syncedLyrics),
 							hasTimestamps: true,
 							songInfo: {

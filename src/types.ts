@@ -63,6 +63,7 @@ export interface LyricsResponse {
 	songInfo?: SongInfo;
 	error?: string;
 	syncedLyrics?: SyncedLyric[];
+	richSyncedLyrics?: RichSyncedLyricLine[];
 	hasTimestamps?: boolean;
 }
 
@@ -75,6 +76,32 @@ export interface SyncedLyric {
 		seconds: number;
 		ms: number;
 	};
+}
+
+export interface WordSyncedLyric {
+	text: string;
+	time: {
+		total: number; // time in seconds
+		minutes: number;
+		seconds: number;
+		ms: number;
+	};
+}
+
+export interface RichSyncedLyricLine {
+	startTime: {
+		total: number;
+		minutes: number;
+		seconds: number;
+		ms: number;
+	};
+	endTime: {
+		total: number;
+		minutes: number;
+		seconds: number;
+		ms: number;
+	};
+	words: WordSyncedLyric[];
 }
 
 export interface Subtitle {
